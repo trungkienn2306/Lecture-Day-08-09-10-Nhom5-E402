@@ -21,6 +21,12 @@ import argparse
 from datetime import datetime
 from typing import Optional
 
+# Paths
+TRACES_TEST = "artifacts/traces/test"
+TRACES_GRADING = "artifacts/traces/grading"
+REPORT_TEST = "artifacts/eval_report_test.json"
+REPORT_GRADING = "artifacts/eval_report_grading.json"
+
 # Import graph
 sys.path.insert(0, os.path.dirname(__file__))
 from graph import run_graph, save_trace
@@ -30,7 +36,10 @@ from graph import run_graph, save_trace
 # 1. Run Pipeline on Test Questions
 # ─────────────────────────────────────────────
 
-def run_test_questions(questions_file: str = "data/test_questions.json") -> list:
+def run_test_questions(
+    questions_file: str = "data/test_questions.json", 
+    trace_dir: str = TRACES_TEST
+) -> list:
     """
     Chạy pipeline với danh sách câu hỏi, lưu trace từng câu.
 
@@ -55,7 +64,7 @@ def run_test_questions(questions_file: str = "data/test_questions.json") -> list
             result["question_id"] = q_id
 
             # Save individual trace
-            trace_file = save_trace(result, f"artifacts/traces")
+            trace_file = save_trace(result, trace_dir)
             print(f"  ✓ route={result.get('supervisor_route', '?')}, "
                   f"conf={result.get('confidence', 0):.2f}, "
                   f"{result.get('latency_ms', 0)}ms")
@@ -87,13 +96,12 @@ def run_test_questions(questions_file: str = "data/test_questions.json") -> list
 # 2. Run Grading Questions (Sprint 4)
 # ─────────────────────────────────────────────
 
-def run_grading_questions(questions_file: str = "data/grading_questions.json") -> str:
+def run_grading_questions(
+    questions_file: str = "data/grading_questions.json",
+    trace_dir: str = TRACES_GRADING
+) -> str:
     """
-    Chạy pipeline với grading questions và lưu JSONL log.
-    Dùng cho chấm điểm nhóm (chạy sau khi grading_questions.json được public lúc 17:00).
-
-    Returns:
-        path tới grading_run.jsonl
+    Chạy pipeline với grading questions và lưu JSONL log + individual traces.
     """
     if not os.path.exists(questions_file):
         print(f"❌ {questions_file} chưa được public (sau 17:00 mới có).")
@@ -102,11 +110,11 @@ def run_grading_questions(questions_file: str = "data/grading_questions.json") -
     with open(questions_file, encoding="utf-8") as f:
         questions = json.load(f)
 
-    os.makedirs("artifacts", exist_ok=True)
+    os.makedirs(trace_dir, exist_ok=True)
     output_file = "artifacts/grading_run.jsonl"
 
     print(f"\n🎯 Running GRADING questions — {len(questions)} câu")
-    print(f"   Output → {output_file}")
+    print(f"   Output → {output_file} & {trace_dir}/")
     print("=" * 60)
 
     with open(output_file, "w", encoding="utf-8") as out:
@@ -117,6 +125,9 @@ def run_grading_questions(questions_file: str = "data/grading_questions.json") -
 
             try:
                 result = run_graph(question_text)
+                # Lưu individual trace
+                save_trace(result, trace_dir)
+                
                 record = {
                     "id": q_id,
                     "question": question_text,
@@ -288,10 +299,9 @@ def compare_single_vs_multi(
 # 5. Save Eval Report
 # ─────────────────────────────────────────────
 
-def save_eval_report(comparison: dict) -> str:
+def save_eval_report(comparison: dict, output_file: str = REPORT_TEST) -> str:
     """Lưu báo cáo eval tổng kết ra file JSON."""
-    os.makedirs("artifacts", exist_ok=True)
-    output_file = "artifacts/eval_report.json"
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(comparison, f, ensure_ascii=False, indent=2)
     return output_file
@@ -331,18 +341,27 @@ if __name__ == "__main__":
         # Chạy grading questions
         log_file = run_grading_questions()
         if log_file:
+            # Sau khi chạy grading, cập nhật báo cáo tổng kết dựa trên các trace mới
+            metrics = analyze_traces(TRACES_GRADING)
+            print_metrics(metrics)
+            
+            comparison = compare_single_vs_multi(TRACES_GRADING)
+            report_file = save_eval_report(comparison, REPORT_GRADING)
+            
             print(f"\n✅ Grading log: {log_file}")
-            print("   Nộp file này trước 18:00!")
+            print(f"📊 New eval report based on grading: {report_file}")
+            print("   Nộp file jsonl trước 18:00!")
 
     elif args.analyze:
-        # Phân tích traces
-        metrics = analyze_traces()
+        # Phân tích traces - mặc định là bộ test
+        target_dir = args.dir if hasattr(args, 'dir') and args.dir else TRACES_TEST
+        metrics = analyze_traces(target_dir)
         print_metrics(metrics)
 
     elif args.compare:
         # So sánh single vs multi
-        comparison = compare_single_vs_multi()
-        report_file = save_eval_report(comparison)
+        comparison = compare_single_vs_multi(TRACES_TEST)
+        report_file = save_eval_report(comparison, REPORT_TEST)
         print(f"\n📊 Comparison report saved → {report_file}")
         print("\n=== Day 08 vs Day 09 ===")
         for k, v in comparison.get("analysis", {}).items():
@@ -350,15 +369,15 @@ if __name__ == "__main__":
 
     else:
         # Default: chạy test questions
-        results = run_test_questions(args.test_file)
+        results = run_test_questions(args.test_file, TRACES_TEST)
 
         # Phân tích trace
-        metrics = analyze_traces()
+        metrics = analyze_traces(TRACES_TEST)
         print_metrics(metrics)
 
         # Lưu báo cáo
-        comparison = compare_single_vs_multi()
-        report_file = save_eval_report(comparison)
+        comparison = compare_single_vs_multi(TRACES_TEST)
+        report_file = save_eval_report(comparison, REPORT_TEST)
         print(f"\n📄 Eval report → {report_file}")
         print("\n✅ Sprint 4 complete!")
         print("   Next: Điền docs/ templates và viết reports/")

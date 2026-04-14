@@ -1,58 +1,42 @@
 # System Architecture — Lab Day 09
 
-**Nhóm:** ___________  
-**Ngày:** ___________  
+**Nhóm:** 5 - E402  
+**Ngày:** 14/04/2026  
 **Version:** 1.0
 
 ---
 
 ## 1. Tổng quan kiến trúc
 
-> Mô tả ngắn hệ thống của nhóm: chọn pattern gì, gồm những thành phần nào.
+Kiến trúc hệ thống được thiết kế theo mô hình **Multi-Agent Orchestration**, tập trung vào khả năng chuyên môn hóa của từng đơn vị thực thi (Workers) dưới sự điều phối của một bộ não trung tâm (Supervisor).
 
 **Pattern đã chọn:** Supervisor-Worker  
 **Lý do chọn pattern này (thay vì single agent):**
-
-_________________
+- **Độ chính xác cao:** Ngăn chặn việc LLM bị "loãng" ngữ cảnh khi phải xử lý quá nhiều tài liệu cùng lúc.
+- **Khả năng mở rộng:** Dễ dàng tích hợp thêm các công cụ bên thứ ba (qua MCP) mà không cần thay đổi logic của toàn bộ pipeline.
+- **Explainability:** Cung cấp lý do định tuyến (route_reason) cho mọi quyết định.
 
 ---
 
 ## 2. Sơ đồ Pipeline
 
-> Vẽ sơ đồ pipeline dưới dạng text, Mermaid diagram, hoặc ASCII art.
-> Yêu cầu tối thiểu: thể hiện rõ luồng từ input → supervisor → workers → output.
+Hệ thống điều phối dữ liệu qua một Graph tập trung, hỗ trợ cả Human-in-the-loop và MCP Server.
 
-**Ví dụ (ASCII art):**
-```
-User Request
-     │
-     ▼
-┌──────────────┐
-│  Supervisor  │  ← route_reason, risk_high, needs_tool
-└──────┬───────┘
-       │
-   [route_decision]
-       │
-  ┌────┴────────────────────┐
-  │                         │
-  ▼                         ▼
-Retrieval Worker     Policy Tool Worker
-  (evidence)           (policy check + MCP)
-  │                         │
-  └─────────┬───────────────┘
-            │
-            ▼
-      Synthesis Worker
-        (answer + cite)
-            │
-            ▼
-         Output
-```
-
-**Sơ đồ thực tế của nhóm:**
-
-```
-[NHÓM ĐIỀN VÀO ĐÂY]
+```mermaid
+graph TD
+    User([User Request]) --> Supervisor{Supervisor Agent}
+    Supervisor -->|route| RW[Retrieval Worker]
+    Supervisor -->|route| PW[Policy Tool Worker]
+    
+    subgraph "External Tools Layer"
+    PW -->|HTTP| MCPServer[MCP Server - FastAPI]
+    MCPServer --> Tool1[search_kb]
+    MCPServer --> Tool2[get_ticket_info]
+    MCPServer --> Tool3[check_access_permission]
+    end
+    
+    RW & PW --> Syn[Synthesis Worker]
+    Syn --> Output([Final Answer])
 ```
 
 ---
@@ -63,52 +47,49 @@ Retrieval Worker     Policy Tool Worker
 
 | Thuộc tính | Mô tả |
 |-----------|-------|
-| **Nhiệm vụ** | ___________________ |
-| **Input** | ___________________ |
+| **Nhiệm vụ** | Phân loại ý định người dùng và định tuyến câu hỏi. |
+| **Input** | `AgentState` containing the user task. |
 | **Output** | supervisor_route, route_reason, risk_high, needs_tool |
-| **Routing logic** | ___________________ |
-| **HITL condition** | ___________________ |
+| **Routing logic** | Sử dụng LLM-based classifier kết hợp bộ từ khóa chuyên biệt. |
+| **HITL condition** | Kích hoạt khi `risk_high=True` hoặc gặp lỗi hệ thống (ERR-xxx). |
 
 ### Retrieval Worker (`workers/retrieval.py`)
 
 | Thuộc tính | Mô tả |
 |-----------|-------|
-| **Nhiệm vụ** | ___________________ |
-| **Embedding model** | ___________________ |
-| **Top-k** | ___________________ |
-| **Stateless?** | Yes / No |
+| **Nhiệm vụ** | Tra cứu thông tin tĩnh từ Knowledge Base qua Vector Search. |
+| **Embedding model** | text-embedding-3-small |
+| **Top-k** | 3 - 5 |
+| **Stateless?** | Yes |
 
 ### Policy Tool Worker (`workers/policy_tool.py`)
 
 | Thuộc tính | Mô tả |
 |-----------|-------|
-| **Nhiệm vụ** | ___________________ |
-| **MCP tools gọi** | ___________________ |
-| **Exception cases xử lý** | ___________________ |
+| **Nhiệm vụ** | Xử lý các yêu cầu liên quan đến chính sách, hoàn tiền và quyền truy cập. |
+| **MCP tools gọi** | `search_kb`, `check_access_permission`, `get_ticket_info`. |
+| **Exception cases xử lý** | Flash Sale, Probation period, Emergency Access. |
 
 ### Synthesis Worker (`workers/synthesis.py`)
 
 | Thuộc tính | Mô tả |
 |-----------|-------|
-| **LLM model** | ___________________ |
-| **Temperature** | ___________________ |
-| **Grounding strategy** | ___________________ |
-| **Abstain condition** | ___________________ |
+| **LLM model** | gpt-4o / gemini-1.5-flash |
+| **Temperature** | 0.0 |
+| **Grounding strategy** | Trích dẫn nguồn theo định dạng [nguồn X]. |
+| **Abstain condition** | Khi AgentState báo lack_of_evidence. |
 
 ### MCP Server (`mcp_server.py`)
 
 | Tool | Input | Output |
 |------|-------|--------|
 | search_kb | query, top_k | chunks, sources |
-| get_ticket_info | ticket_id | ticket details |
-| check_access_permission | access_level, requester_role | can_grant, approvers |
-| ___________________ | ___________________ | ___________________ |
+| get_ticket_info | ticket_id | ticket details (SLA, Assignee) |
+| check_access_permission | access_level, is_emergency | approvers, can_grant |
 
 ---
 
 ## 4. Shared State Schema
-
-> Liệt kê các fields trong AgentState và ý nghĩa của từng field.
 
 | Field | Type | Mô tả | Ai đọc/ghi |
 |-------|------|-------|-----------|
@@ -120,7 +101,6 @@ Retrieval Worker     Policy Tool Worker
 | mcp_tools_used | list | Tool calls đã thực hiện | policy_tool ghi |
 | final_answer | str | Câu trả lời cuối | synthesis ghi |
 | confidence | float | Mức tin cậy | synthesis ghi |
-| ___________________ | ___________________ | ___________________ | ___________________ |
 
 ---
 
@@ -131,18 +111,15 @@ Retrieval Worker     Policy Tool Worker
 | Debug khi sai | Khó — không rõ lỗi ở đâu | Dễ hơn — test từng worker độc lập |
 | Thêm capability mới | Phải sửa toàn prompt | Thêm worker/MCP tool riêng |
 | Routing visibility | Không có | Có route_reason trong trace |
-| ___________________ | ___________________ | ___________________ |
+| Độ chính xác | Trung bình | Cao (nhờ lọc Policy) |
 
 **Nhóm điền thêm quan sát từ thực tế lab:**
-
-_________________
+Hệ thống Multi-Agent có khả năng tự nhận diện các câu hỏi nhạy cảm và chuyển hướng sang Policy Worker ngay cả khi câu hỏi trông có vẻ đơn giản. Điều này tạo ra một "lớp lọc" an toàn cho hệ thống.
 
 ---
 
 ## 6. Giới hạn và điểm cần cải tiến
 
-> Nhóm mô tả những điểm hạn chế của kiến trúc hiện tại.
-
-1. ___________________
-2. ___________________
-3. ___________________
+1. Thời gian phản hồi (Latency) còn cao (trung bình 5 giây).
+2. Chi phí API tăng do phát sinh nhiều lần gọi LLM cho khâu điều phối.
+3. Cần tích hợp cơ chế Retry cho MCP Server khi gặp sự cố mạng (HTTP errors).

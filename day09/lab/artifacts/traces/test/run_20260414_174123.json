@@ -1,0 +1,106 @@
+{
+  "task": "Nhân viên được làm remote tối đa mấy ngày mỗi tuần?",
+  "route_reason": "default: không khớp keyword đặc biệt → retrieval_worker",
+  "risk_high": false,
+  "needs_tool": false,
+  "hitl_triggered": false,
+  "retrieved_chunks": [
+    {
+      "text": "4.1 Điều kiện remote:\n- Nhân viên sau probation period có thể làm remote tối đa 2 ngày/tuần.\n- Team Lead phải phê duyệt lịch remote qua HR Portal.\n- Ngày onsite bắt buộc: Thứ 3 và Thứ 5 theo lịch team.",
+      "source": "hr_leave_policy.txt",
+      "score": 0.8429,
+      "metadata": {
+        "source": "hr_leave_policy.txt",
+        "chunk_index": 13
+      }
+    },
+    {
+      "text": "=== Phần 4: Remote work policy ===",
+      "source": "hr_leave_policy.txt",
+      "score": 0.7945,
+      "metadata": {
+        "chunk_index": 12,
+        "source": "hr_leave_policy.txt"
+      }
+    },
+    {
+      "text": "Level 1 — Read Only:\nÁp dụng cho: Tất cả nhân viên mới trong 30 ngày đầu.\nPhê duyệt: Line Manager.\nThời gian xử lý: 1 ngày làm việc.",
+      "source": "access_control_sop.txt",
+      "score": 0.7734,
+      "metadata": {
+        "source": "access_control_sop.txt",
+        "chunk_index": 4
+      }
+    }
+  ],
+  "retrieved_sources": [
+    "hr_leave_policy.txt",
+    "access_control_sop.txt"
+  ],
+  "policy_result": {},
+  "mcp_tools_used": [],
+  "final_answer": "Nhân viên sau probation period có thể làm remote tối đa 2 ngày mỗi tuần. Tuy nhiên, lịch remote phải được Team Lead phê duyệt qua HR Portal. Ngày onsite bắt buộc là Thứ 3 và Thứ 5 theo lịch team [hr_leave_policy.txt].",
+  "sources": [
+    "hr_leave_policy.txt",
+    "access_control_sop.txt"
+  ],
+  "confidence": 0.869,
+  "history": [
+    "[supervisor] received task: Nhân viên được làm remote tối đa mấy ngày mỗi tuần?",
+    "[supervisor] route=retrieval_worker | reason=default: không khớp keyword đặc biệt → retrieval_worker | risk_high=False | needs_tool=False",
+    "[retrieval_worker] starter",
+    "[retrieval_worker] completed: 3 chunks",
+    "[synthesis_worker] started",
+    "[synthesis_worker] answer generated, confidence=0.869",
+    "[graph] completed in 2674ms"
+  ],
+  "workers_called": [
+    "retrieval_worker",
+    "synthesis_worker"
+  ],
+  "supervisor_route": "retrieval_worker",
+  "latency_ms": 2674,
+  "run_id": "run_20260414_174123",
+  "worker_io_logs": [
+    {
+      "worker": "retrieval_worker",
+      "input": {
+        "task": "Nhân viên được làm remote tối đa mấy ngày mỗi tuần?",
+        "top_k": 3
+      },
+      "timestamp_start": "2026-04-14T17:41:23",
+      "output": {
+        "chunks_found": 3,
+        "sources": [
+          "hr_leave_policy.txt",
+          "access_control_sop.txt"
+        ],
+        "top_score": 0.8429
+      },
+      "status": "success",
+      "timestamp_end": "2026-04-14T17:41:24"
+    },
+    {
+      "worker": "synthesis_worker",
+      "input": {
+        "task": "Nhân viên được làm remote tối đa mấy ngày mỗi tuần?",
+        "chunks_count": 3,
+        "has_policy": false,
+        "top_chunk_score": 0.8429
+      },
+      "timestamp_start": "2026-04-14T17:41:24",
+      "output": {
+        "answer_length": 217,
+        "sources": [
+          "hr_leave_policy.txt",
+          "access_control_sop.txt"
+        ],
+        "confidence": 0.869,
+        "abstained": false
+      },
+      "status": "success",
+      "timestamp_end": "2026-04-14T17:41:26"
+    }
+  ],
+  "question_id": "q05"
+}

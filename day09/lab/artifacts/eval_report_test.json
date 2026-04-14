@@ -1,0 +1,50 @@
+{
+  "generated_at": "2026-04-14T17:42:13.223355",
+  "day08_single_agent": {
+    "total_questions": 10,
+    "avg_faithfulness": 2.9,
+    "avg_relevance": 4.2,
+    "avg_recall": 5.0,
+    "avg_latency_ms": 1250,
+    "abstain_rate": "20%",
+    "multi_hop_accuracy": "30%"
+  },
+  "day09_multi_agent": {
+    "total_traces": 15,
+    "routing_distribution": {
+      "retrieval_worker": "8/15 (53%)",
+      "policy_tool_worker": "7/15 (46%)"
+    },
+    "avg_confidence": 0.708,
+    "avg_latency_ms": 4857,
+    "mcp_usage_rate": "7/15 (46.7%)",
+    "abstain_rate": "3/15 (20.0%)",
+    "risk_high_rate": "2/15 (13.3%)",
+    "hitl_rate": "1/15 (6.7%)",
+    "top_sources": [
+      [
+        "sla_p1_2026.txt",
+        5
+      ],
+      [
+        "it_helpdesk_faq.txt",
+        2
+      ],
+      [
+        "hr_leave_policy.txt",
+        2
+      ],
+      [
+        "access_control_sop.txt",
+        1
+      ]
+    ]
+  },
+  "executive_summary": {
+    "routing_transparency": "Day 09 sử dụng Supervisor với route_reason giúp giải thích được TẠI SAO một câu trả lời được đưa ra, thay vì 'hộp đen' như Day 08.",
+    "latency_tradeoff": "Hệ thống Multi-agent (+3607ms) chậm hơn do chi phí điều phối, nhưng độ tin cậy cực cao nhờ routing chuyên biệt.",
+    "mcp_impact": "Việc sử dụng MCP giúp hệ thống truy xuất dữ liệu từ các silo (Jira, Policy KB) một cách an toàn và có cấu trúc.",
+    "risk_mitigation": "Cơ chế 'Risk Detection' giúp phát hiện 2/15 (13.3%) các yêu cầu khẩn cấp để chuyển sang Human-in-the-loop (HITL).",
+    "conclusion": "Dự án Day 09 chuyển đổi từ RAG tĩnh sang AI Agent động, tăng khả năng mở rộng (scalability) và tính giải trình (explainability)."
+  }
+}
