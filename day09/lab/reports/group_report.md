@@ -5,7 +5,7 @@
 | Tên | Vai trò | Email |
 |-----|---------|-------|
 | Trần Ngọc Huy | Supervisor Owner | 26ai.huytn@vinuni.edu.vn |
-|  Nông Trung Kiên | Worker Owner | ___ |
+|  Nông Trung Kiên | Worker Owner | 26ai.kiennt@vinuni.edu.vn |
 | Bùi Thế Công | MCP Owner | 26ai.congbt@vinuni.edu.vn |
 | Bùi Thế Công | Trace & Docs Owner | 26ai.congbt@vinuni.edu.vn |
 
@@ -138,7 +138,11 @@ Nhóm sẽ thực hiện "Parallel Sprinting" sớm hơn. Có thể tự mock da
 
 ## 6. Nếu có thêm 1 ngày, nhóm sẽ làm gì? (50–100 từ)
 
-Nhóm sẽ triển khai cơ chế **Parallel Node Execution** trong LangGraph. Hiện tại Supervisor gọi worker tuần tự; nếu có thêm 1 ngày, chúng tôi sẽ cho phép gọi đồng thời các worker cho các câu hỏi multi-hop như `gq09` để giảm latency từ 10s xuống còn khoảng 4-5s, đồng thời tích hợp thêm một lớp Human-in-the-loop (HITL) thực tế qua giao diện UI.
+Nếu có thêm 1 ngày để tối ưu hóa hệ thống, nhóm sẽ tập trung vào 4 cải tiến cốt lõi dựa trên các quan sát từ trace:
+1.  **Parallel Node Execution:** Triển khai chạy song song các worker/tool calls trong LangGraph để giảm độ trễ cho các câu hỏi multi-hop như `gq09`, dự kiến giảm latency từ 10s xuống còn 4-5s.
+2.  **Confidence-based HITL Escalation:** Bổ sung logic hậu kiểm; nếu `confidence < 0.6` trên các tác vụ có `risk_high=True`, hệ thống sẽ tự động escalate lên Human-in-the-loop để đảm bảo an toàn tuyệt đối.
+3.  **Adaptive Retry Mechanism:** Thêm cơ chế thử lại với hàm trễ lũy thừa (exponential backoff) cho các lệnh gọi MCP qua HTTP để xử lý triệt để các trường hợp timeout khi server quá tải.
+4.  **LLM-Auto-Grader:** Xây dựng module tự động chấm điểm dựa trên `grading_criteria` của 10 câu hỏi grading, giúp nhóm có scorecard tức thì và chính xác thay vì phải đối soát thủ công.
 
 ---
 
