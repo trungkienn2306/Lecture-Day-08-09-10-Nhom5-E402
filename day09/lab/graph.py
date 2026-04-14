@@ -84,47 +84,105 @@ def supervisor_node(state: AgentState) -> AgentState:
     2. Có cần MCP tool không
     3. Có risk cao cần HITL không
 
-    TODO Sprint 1: Implement routing logic dựa vào task keywords.
+    Routing logic (theo thứ tự ưu tiên):
+    - Mã lỗi không rõ (ERR-xxx) + không đủ context → human_review
+    - "hoàn tiền", "refund", "flash sale", "license", "digital" → policy_tool_worker
+    - "cấp quyền", "access", "level 3", "emergency", "contractor" → policy_tool_worker
+    - "P1", "escalation", "sla", "ticket", "sự cố", "2am" → retrieval_worker (ưu tiên)
+    - còn lại → retrieval_worker (default)
     """
     task = state["task"].lower()
     state["history"].append(f"[supervisor] received task: {state['task'][:80]}")
 
-    # --- TODO: Implement routing logic ---
-    # Gợi ý:
-    # - "hoàn tiền", "refund", "flash sale", "license" → policy_tool_worker
-    # - "cấp quyền", "access level", "level 3", "emergency" → policy_tool_worker
-    # - "P1", "escalation", "sla", "ticket" → retrieval_worker
-    # - mã lỗi không rõ (ERR-XXX), không đủ context → human_review
-    # - còn lại → retrieval_worker
+    # ─── Bước 1: Phát hiện mã lỗi không rõ ───
+    import re
+    unknown_error_pattern = re.search(r"err-[a-z0-9]+", task)
 
-    route = "retrieval_worker"         # TODO: thay bằng logic thực
-    route_reason = "default route"    # TODO: thay bằng lý do thực
+    # ─── Bước 2: Keyword sets ───────────────
+    policy_keywords = [
+        "hoàn tiền", "refund", "flash sale", "flashsale",
+        "license", "bản quyền", "digital", "kỹ thuật số",
+        "policy", "chính sách", "quy định",
+        "hủy đơn", "cancel", "đổi trả",
+    ]
+
+    access_keywords = [
+        "cấp quyền", "access", "level 3", "admin access",
+        "emergency", "khẩn cấp", "contractor", "nhà thầu",
+        "tạm thời", "temporary access", "quyền truy cập",
+        "phân quyền",
+    ]
+
+    retrieval_priority_keywords = [
+        "p1", "escalation", "leo thang", "sla",
+        "ticket", "sự cố", "incident", "2am",
+        "thông báo", "ai nhận", "notify",
+        "helpdesk", "on-call",
+    ]
+
+    risk_keywords = [
+        "emergency", "khẩn cấp", "2am",
+        "không có người", "ngoài giờ", "off-hours",
+        "err-", "lỗi không rõ", "unknown error",
+    ]
+
+    # ─── Bước 3: Tính điểm ưu tiên ─────────
+    has_policy   = any(kw in task for kw in policy_keywords)
+    has_access   = any(kw in task for kw in access_keywords)
+    has_retrieval = any(kw in task for kw in retrieval_priority_keywords)
+    risk_high    = any(kw in task for kw in risk_keywords)
+
+    # ─── Bước 4: Routing logic (theo ưu tiên) ──
+    route = "retrieval_worker"
+    route_reason = "default: không khớp keyword đặc biệt → retrieval_worker"
     needs_tool = False
-    risk_high = False
 
-    # Ví dụ routing cơ bản — nhóm phát triển thêm:
-    policy_keywords = ["hoàn tiền", "refund", "flash sale", "license", "cấp quyền", "access", "level 3"]
-    risk_keywords = ["emergency", "khẩn cấp", "2am", "không rõ", "err-"]
-
-    if any(kw in task for kw in policy_keywords):
-        route = "policy_tool_worker"
-        route_reason = f"task contains policy/access keyword"
-        needs_tool = True
-
-    if any(kw in task for kw in risk_keywords):
-        risk_high = True
-        route_reason += " | risk_high flagged"
-
-    # Human review override
-    if risk_high and "err-" in task:
+    # Priority 1: Mã lỗi không rõ + risk cao → human_review
+    if unknown_error_pattern and not has_retrieval:
         route = "human_review"
-        route_reason = "unknown error code + risk_high → human review"
+        route_reason = (
+            f"phát hiện mã lỗi không rõ '{unknown_error_pattern.group()}' "
+            "và không đủ context → chuyển human review"
+        )
+        risk_high = True
 
+    # Priority 2: Policy/refund/license keywords → policy_tool_worker
+    elif has_policy:
+        route = "policy_tool_worker"
+        needs_tool = True
+        matched = [kw for kw in policy_keywords if kw in task]
+        route_reason = f"task chứa policy keyword {matched} → policy_tool_worker"
+
+    # Priority 3: Access/emergency keywords → policy_tool_worker
+    elif has_access:
+        route = "policy_tool_worker"
+        needs_tool = True
+        matched = [kw for kw in access_keywords if kw in task]
+        route_reason = f"task chứa access/emergency keyword {matched} → policy_tool_worker"
+
+    # Priority 4: P1/SLA/escalation → retrieval_worker (ưu tiên)
+    elif has_retrieval:
+        route = "retrieval_worker"
+        matched = [kw for kw in retrieval_priority_keywords if kw in task]
+        route_reason = f"task chứa SLA/ticket/escalation keyword {matched} → retrieval_worker"
+
+    # Gắn thêm risk flag vào route_reason nếu có
+    if risk_high and "risk_high" not in route_reason:
+        risk_matched = [kw for kw in risk_keywords if kw in task]
+        route_reason += f" | risk_high=True (matched: {risk_matched})"
+
+    # ─── Bước 5: Ghi vào state ──────────────
     state["supervisor_route"] = route
     state["route_reason"] = route_reason
     state["needs_tool"] = needs_tool
     state["risk_high"] = risk_high
-    state["history"].append(f"[supervisor] route={route} reason={route_reason}")
+    state["history"].append(
+        f"[supervisor] route={route} | reason={route_reason} | "
+        f"risk_high={risk_high} | needs_tool={needs_tool}"
+    )
+
+    print(f"  [supervisor] → {route}")
+    print(f"  [supervisor] reason: {route_reason}")
 
     return state
 
@@ -314,27 +372,67 @@ def save_trace(state: AgentState, output_dir: str = "./artifacts/traces") -> str
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("Day 09 Lab — Supervisor-Worker Graph")
+    print("Day 09 Lab — Supervisor-Worker Graph (Sprint 1)")
     print("=" * 60)
 
+    # ─── Sprint 1 Test: 5 queries bao phủ mọi routing path ───
     test_queries = [
+        # 1. SLA/ticket → retrieval_worker
+        "Ticket P1 lúc 2am — escalation xảy ra thế nào và ai nhận thông báo?",
+
+        # 2. Policy/refund → policy_tool_worker
+        "Khách hàng Flash Sale yêu cầu hoàn tiền vì sản phẩm lỗi — policy nào áp dụng?",
+
+        # 3. Access/emergency → policy_tool_worker
+        "Contractor cần Admin Access để sửa P1 khẩn cấp — quy trình tạm thời là gì?",
+
+        # 4. Unknown error code → human_review
+        "Server bị lỗi ERR-5X2 và hệ thống không phản hồi.",
+
+        # 5. General SLA question → retrieval_worker (default)
         "SLA xử lý ticket P1 là bao lâu?",
-        "Khách hàng Flash Sale yêu cầu hoàn tiền vì sản phẩm lỗi — được không?",
-        "Cần cấp quyền Level 3 để khắc phục P1 khẩn cấp. Quy trình là gì?",
     ]
 
-    for query in test_queries:
-        print(f"\n▶ Query: {query}")
+    passed = 0
+    failed = 0
+
+    expected_routes = [
+        "retrieval_worker",   # query 1: P1 escalation
+        "policy_tool_worker", # query 2: flash sale refund
+        "policy_tool_worker", # query 3: admin access emergency
+        "human_review",       # query 4: unknown error ERR-xxx
+        "retrieval_worker",   # query 5: SLA question
+    ]
+
+    for i, (query, expected) in enumerate(zip(test_queries, expected_routes), 1):
+        print(f"\n{'─'*60}")
+        print(f"▶ Query #{i}: {query}")
         result = run_graph(query)
-        print(f"  Route   : {result['supervisor_route']}")
+
+        # Trích xuất initial route dựa trên worker đầu tiên được gọi
+        actual_route = result['workers_called'][0] if result['workers_called'] else result['supervisor_route']
+        ok = "✅" if actual_route == expected else "❌"
+        if actual_route == expected:
+            passed += 1
+        else:
+            failed += 1
+
+        print(f"  Route   : {actual_route} {ok} (expected: {expected})")
         print(f"  Reason  : {result['route_reason']}")
+        print(f"  Risk    : {result['risk_high']}")
         print(f"  Workers : {result['workers_called']}")
-        print(f"  Answer  : {result['final_answer'][:100]}...")
+        print(f"  Answer  : {result['final_answer'][:80]}...")
         print(f"  Confidence: {result['confidence']}")
         print(f"  Latency : {result['latency_ms']}ms")
 
         # Lưu trace
         trace_file = save_trace(result)
-        print(f"  Trace saved → {trace_file}")
+        print(f"  Trace   : {trace_file}")
 
-    print("\n✅ graph.py test complete. Implement TODO sections in Sprint 1 & 2.")
+    print(f"\n{'='*60}")
+    print(f"Sprint 1 Results: {passed}/{len(test_queries)} passed, {failed} failed")
+    if failed == 0:
+        print("✅ All routing tests PASSED — Sprint 1 Definition of Done met!")
+    else:
+        print("⚠️  Some routing tests failed — check route_reason logs above.")
+    print(f"{'='*60}")
