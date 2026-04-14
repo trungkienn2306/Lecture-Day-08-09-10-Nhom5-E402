@@ -30,8 +30,19 @@ Chạy thử:
 
 import os
 import json
+import uvicorn
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+
+# Khởi tạo FastAPI app
+app = FastAPI(
+    title="Day 09 MCP Server (Advanced)",
+    description="Thực hiện MCP Protocol qua HTTP REST API",
+    version="1.1.0"
+)
 
 
 # ─────────────────────────────────────────────
@@ -328,10 +339,58 @@ def dispatch_tool(tool_name: str, tool_input: dict) -> dict:
 
 
 # ─────────────────────────────────────────────
+# API Endpoints — MCP HTTP Layer
+# ─────────────────────────────────────────────
+
+class ToolRequest(BaseModel):
+    arguments: Dict[str, Any]
+
+@app.get("/")
+async def root():
+    return {
+        "status": "online",
+        "server": "Day 09 Advanced MCP",
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/tools")
+async def get_tools_list():
+    """MCP Discovery: Liệt kê các công cụ hỗ trợ."""
+    return {"tools": list_tools()}
+
+@app.post("/tools/{tool_name}")
+async def call_tool(tool_name: str, request: Dict[str, Any]):
+    """
+    MCP Execution: Endpoint thực thi công cụ.
+    Nhận payload JSON giống như spec MCP.
+    """
+    print(f"  [MCP Server] Received request for tool: {tool_name}")
+    
+    # Một số lab client gửi payload dạng {"arguments": {...}} hoặc gửi trực tiếp {...}
+    # Chúng ta xử lý linh hoạt cả 2:
+    args = request.get("arguments", request)
+    
+    result = dispatch_tool(tool_name, args)
+    
+    if "error" in result:
+        print(f"  [MCP Server] Error executing {tool_name}: {result['error']}")
+        # Vẫn trả về 200 nhưng chứa object lỗi để Agent xử lý
+        return JSONResponse(content=result, status_code=200)
+        
+    print(f"  [MCP Server] Tool {tool_name} executed successfully.")
+    return result
+
+# ─────────────────────────────────────────────
 # Test & Demo
 # ─────────────────────────────────────────────
 
 if __name__ == "__main__":
+    # Khi chạy trực tiếp file này -> khởi động Web Server
+    print("\n🚀 Starting Advanced MCP Server on http://localhost:8765")
+    print("📋 Press Ctrl+C to stop.\n")
+    
+    uvicorn.run(app, host="0.0.0.0", port=8765, log_level="info")
+
     print("=" * 60)
     print("MCP Server — Tool Discovery & Test")
     print("=" * 60)

@@ -11,8 +11,16 @@ Chạy thử:
 
 import json
 import os
+import sys
+import io
 from datetime import datetime
 from typing import TypedDict, Literal, Optional
+
+# Force UTF-8 stdout/stderr trên Windows
+if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+if sys.stderr.encoding and sys.stderr.encoding.lower() != 'utf-8':
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # Uncomment nếu dùng LangGraph:
 # from langgraph.graph import StateGraph, END
@@ -151,20 +159,20 @@ def supervisor_node(state: AgentState) -> AgentState:
         route = "policy_tool_worker"
         needs_tool = True
         matched = [kw for kw in policy_keywords if kw in task]
-        route_reason = f"task chứa policy keyword {matched} → policy_tool_worker"
+        route_reason = f"task chứa policy keyword {matched} → chọn policy_tool_worker [MCP SELECTED]"
 
     # Priority 3: Access/emergency keywords → policy_tool_worker
     elif has_access:
         route = "policy_tool_worker"
         needs_tool = True
         matched = [kw for kw in access_keywords if kw in task]
-        route_reason = f"task chứa access/emergency keyword {matched} → policy_tool_worker"
+        route_reason = f"task chứa access/emergency keyword {matched} → chọn policy_tool_worker [MCP SELECTED]"
 
     # Priority 4: P1/SLA/escalation → retrieval_worker (ưu tiên)
     elif has_retrieval:
         route = "retrieval_worker"
         matched = [kw for kw in retrieval_priority_keywords if kw in task]
-        route_reason = f"task chứa SLA/ticket/escalation keyword {matched} → retrieval_worker"
+        route_reason = f"task chứa SLA/ticket/escalation keyword {matched} → retrieval_worker [NO MCP]"
 
     # Gắn thêm risk flag vào route_reason nếu có
     if risk_high and "risk_high" not in route_reason:
@@ -233,57 +241,45 @@ def human_review_node(state: AgentState) -> AgentState:
 # 5. Import Workers
 # ─────────────────────────────────────────────
 
-# TODO Sprint 2: Uncomment sau khi implement workers
-# from workers.retrieval import run as retrieval_run
-# from workers.policy_tool import run as policy_tool_run
-# from workers.synthesis import run as synthesis_run
+# Sprint 2: Đã implement workers, tiến hành kết nối
+from workers.retrieval import run as retrieval_run
+from workers.policy_tool import run as policy_tool_run
+from workers.synthesis import run as synthesis_run
 
 
 def retrieval_worker_node(state: AgentState) -> AgentState:
-    """Wrapper gọi retrieval worker."""
-    # TODO Sprint 2: Thay bằng retrieval_run(state)
+    """Wrapper gọi retrieval worker thực tế."""
     state["workers_called"].append("retrieval_worker")
-    state["history"].append("[retrieval_worker] called")
-
-    # Placeholder output để test graph chạy được
-    state["retrieved_chunks"] = [
-        {"text": "SLA P1: phản hồi 15 phút, xử lý 4 giờ.", "source": "sla_p1_2026.txt", "score": 0.92}
-    ]
-    state["retrieved_sources"] = ["sla_p1_2026.txt"]
-    state["history"].append(f"[retrieval_worker] retrieved {len(state['retrieved_chunks'])} chunks")
+    state["history"].append("[retrieval_worker] starter")
+    
+    # Chạy worker thực tế
+    state = retrieval_run(state)
+    
+    state["history"].append(f"[retrieval_worker] completed: {len(state.get('retrieved_chunks', []))} chunks")
     return state
 
 
 def policy_tool_worker_node(state: AgentState) -> AgentState:
-    """Wrapper gọi policy/tool worker."""
-    # TODO Sprint 2: Thay bằng policy_tool_run(state)
+    """Wrapper gọi policy/tool worker thực tế."""
     state["workers_called"].append("policy_tool_worker")
-    state["history"].append("[policy_tool_worker] called")
+    state["history"].append("[policy_tool_worker] started")
 
-    # Placeholder output
-    state["policy_result"] = {
-        "policy_applies": True,
-        "policy_name": "refund_policy_v4",
-        "exceptions_found": [],
-        "source": "policy_refund_v4.txt",
-    }
+    # Chạy worker thực tế
+    state = policy_tool_run(state)
+    
     state["history"].append("[policy_tool_worker] policy check complete")
     return state
 
 
 def synthesis_worker_node(state: AgentState) -> AgentState:
-    """Wrapper gọi synthesis worker."""
-    # TODO Sprint 2: Thay bằng synthesis_run(state)
+    """Wrapper gọi synthesis worker thực tế."""
     state["workers_called"].append("synthesis_worker")
-    state["history"].append("[synthesis_worker] called")
+    state["history"].append("[synthesis_worker] started")
 
-    # Placeholder output
-    chunks = state.get("retrieved_chunks", [])
-    sources = state.get("retrieved_sources", [])
-    state["final_answer"] = f"[PLACEHOLDER] Câu trả lời được tổng hợp từ {len(chunks)} chunks."
-    state["sources"] = sources
-    state["confidence"] = 0.75
-    state["history"].append(f"[synthesis_worker] answer generated, confidence={state['confidence']}")
+    # Chạy worker thực tế
+    state = synthesis_run(state)
+    
+    state["history"].append(f"[synthesis_worker] answer generated, confidence={state.get('confidence', 0)}")
     return state
 
 
