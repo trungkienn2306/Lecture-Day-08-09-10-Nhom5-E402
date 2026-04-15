@@ -155,7 +155,11 @@ def cmd_embed_internal(cleaned_csv: Path, *, run_id: str, log) -> bool:
 
     db_path = os.environ.get("CHROMA_DB_PATH", str(ROOT / "chroma_db"))
     collection_name = os.environ.get("CHROMA_COLLECTION", "day10_kb")
-    model_name = os.environ.get("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+    model_name = os.environ.get("EMBEDDING_MODEL", "text-embedding-3-small")
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        log("ERROR: OPENAI_API_KEY chưa được set trong .env")
+        return False
 
     from transform.cleaning_rules import load_raw_csv as load_csv  # same loader
 
@@ -165,7 +169,10 @@ def cmd_embed_internal(cleaned_csv: Path, *, run_id: str, log) -> bool:
         return True
 
     client = chromadb.PersistentClient(path=db_path)
-    emb = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=model_name)
+    emb = embedding_functions.OpenAIEmbeddingFunction(
+        api_key=api_key,
+        model_name=model_name,
+    )
     col = client.get_or_create_collection(name=collection_name, embedding_function=emb)
 
     ids = [r["chunk_id"] for r in rows]

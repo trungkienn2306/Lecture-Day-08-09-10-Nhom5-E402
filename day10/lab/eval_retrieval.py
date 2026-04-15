@@ -41,7 +41,7 @@ def main() -> int:
         import chromadb
         from chromadb.utils import embedding_functions
     except ImportError:
-        print("Install: pip install chromadb sentence-transformers", file=sys.stderr)
+        print("Install: pip install chromadb openai", file=sys.stderr)
         return 1
 
     qpath = Path(args.questions)
@@ -52,10 +52,17 @@ def main() -> int:
     questions = json.loads(qpath.read_text(encoding="utf-8"))
     db_path = os.environ.get("CHROMA_DB_PATH", str(ROOT / "chroma_db"))
     collection_name = os.environ.get("CHROMA_COLLECTION", "day10_kb")
-    model_name = os.environ.get("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+    model_name = os.environ.get("EMBEDDING_MODEL", "text-embedding-3-small")
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        print("ERROR: OPENAI_API_KEY chưa được set trong .env", file=sys.stderr)
+        return 1
 
     client = chromadb.PersistentClient(path=db_path)
-    emb = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=model_name)
+    emb = embedding_functions.OpenAIEmbeddingFunction(
+        api_key=api_key,
+        model_name=model_name,
+    )
     try:
         col = client.get_collection(name=collection_name, embedding_function=emb)
     except Exception as e:
