@@ -25,8 +25,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from monitoring.freshness_check import check_manifest_freshness
-from quality.expectations import run_expectations
+from monitoring.freshness_check import check_manifest_freshness, check_two_boundary_freshness
+from quality.expectations import run_expectations, run_pydantic_expectations
 from transform.cleaning_rules import clean_rows, load_raw_csv, write_cleaned_csv, write_quarantine_csv
 
 load_dotenv()
@@ -61,9 +61,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(msg)
         _log(log_path, msg)
 
+    # BOUNDARY 1 — ingest: timestamp sau khi đọc raw CSV xong (Bonus +1)
+    ingest_boundary_at = datetime.now(timezone.utc).isoformat()
     rows = load_raw_csv(raw_path)
     raw_count = len(rows)
     log(f"run_id={run_id}")
+    log(f"ingest_boundary_at={ingest_boundary_at}")
     log(f"raw_records={raw_count}")
 
     cleaned, quarantine = clean_rows(
@@ -80,7 +83,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     log(f"cleaned_csv={cleaned_path.relative_to(ROOT)}")
     log(f"quarantine_csv={quar_path.relative_to(ROOT)}")
 
-    results, halt = run_expectations(cleaned)
+    results, halt = run_pydantic_expectations(cleaned)
     for r in results:
         sym = "OK" if r.passed else "FAIL"
         log(f"expectation[{r.name}] {sym} ({r.severity}) :: {r.detail}")
@@ -88,7 +91,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         log("PIPELINE_HALT: expectation suite failed (halt).")
         return 2
     if halt and args.skip_validate:
-        log("WARN: expectation failed but --skip-validate → tiếp tục embed (chỉ dùng cho demo Sprint 3).")
+        log("WARN: expectation failed but --skip-validate -- tiep tuc embed (chi dung cho demo Sprint 3).")
 
     # Embed
     embed_ok = cmd_embed_internal(
@@ -98,6 +101,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     )
     if not embed_ok:
         return 3
+
+    # BOUNDARY 2 — publish: timestamp sau khi embed vào Chroma xong (Bonus +1)
+    publish_boundary_at = datetime.now(timezone.utc).isoformat()
+    log(f"publish_boundary_at={publish_boundary_at}")
 
     latest_exported = ""
     if cleaned:
@@ -111,6 +118,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         "cleaned_records": len(cleaned),
         "quarantine_records": len(quarantine),
         "latest_exported_at": latest_exported,
+        "ingest_boundary_at": ingest_boundary_at,
+        "publish_boundary_at": publish_boundary_at,
         "no_refund_fix": bool(args.no_refund_fix),
         "skipped_validate": bool(args.skip_validate and halt),
         "cleaned_csv": str(cleaned_path.relative_to(ROOT)),
@@ -123,6 +132,14 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     status, fdetail = check_manifest_freshness(man_path, sla_hours=float(os.environ.get("FRESHNESS_SLA_HOURS", "24")))
     log(f"freshness_check={status} {json.dumps(fdetail, ensure_ascii=False)}")
+
+    # 2-boundary freshness check (Bonus +1)
+    two_b = check_two_boundary_freshness(
+        man_path,
+        ingest_sla_hours=float(os.environ.get("FRESHNESS_SLA_HOURS", "24")),
+        publish_sla_hours=float(os.environ.get("FRESHNESS_SLA_HOURS", "24")),
+    )
+    log(f"freshness_two_boundary={json.dumps(two_b, ensure_ascii=False)}")
 
     log("PIPELINE_OK")
     return 0
@@ -138,7 +155,11 @@ def cmd_embed_internal(cleaned_csv: Path, *, run_id: str, log) -> bool:
 
     db_path = os.environ.get("CHROMA_DB_PATH", str(ROOT / "chroma_db"))
     collection_name = os.environ.get("CHROMA_COLLECTION", "day10_kb")
-    model_name = os.environ.get("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+    model_name = os.environ.get("EMBEDDING_MODEL", "text-embedding-3-small")
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        log("ERROR: OPENAI_API_KEY chưa được set trong .env")
+        return False
 
     from transform.cleaning_rules import load_raw_csv as load_csv  # same loader
 
@@ -148,7 +169,10 @@ def cmd_embed_internal(cleaned_csv: Path, *, run_id: str, log) -> bool:
         return True
 
     client = chromadb.PersistentClient(path=db_path)
-    emb = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=model_name)
+    emb = embedding_functions.OpenAIEmbeddingFunction(
+        api_key=api_key,
+        model_name=model_name,
+    )
     col = client.get_or_create_collection(name=collection_name, embedding_function=emb)
 
     ids = [r["chunk_id"] for r in rows]

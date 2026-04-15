@@ -45,4 +45,8 @@ chroma_db/
 # Project Specific - Grading questions (không public trước 17:00)
 day08/lab/data/grading_questions.json
 day09/lab/data/grading_questions.json
-day10/lab/data/grading_questions.json
+
+# Cho phép đẩy folder artifacts/logs
+!day10/lab/artifacts/logs/
+!day10/lab/artifacts/logs/*.log
+
