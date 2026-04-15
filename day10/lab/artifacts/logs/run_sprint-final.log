@@ -1,0 +1,42 @@
+run_id=sprint-final
+ingest_boundary_at=2026-04-15T09:01:08.235386+00:00
+raw_records=10
+cleaned_records=6
+quarantine_records=4
+cleaned_csv=artifacts\cleaned\cleaned_sprint-final.csv
+quarantine_csv=artifacts\quarantine\quarantine_sprint-final.csv
+expectation[pydantic_schema_validation] OK (halt) :: pydantic_errors=0
+embed_upsert count=6 collection=day10_kb
+publish_boundary_at=2026-04-15T09:01:22.566437+00:00
+manifest_written=artifacts\manifests\manifest_sprint-final.json
+freshness_check=PASS {"boundary": "publish", "latest_exported_at": "2026-04-15T09:01:22.566437+00:00", "age_hours": 0.0, "sla_hours": 24.0}
+freshness_two_boundary={"overall": "PASS", "run_id": "sprint-final", "ingest": {"status": "PASS", "timestamp": "2026-04-15T09:01:08.235386+00:00", "age_hours": 0.004, "sla_hours": 24.0}, "publish": {"status": "PASS", "timestamp": "2026-04-15T09:01:22.566437+00:00", "age_hours": 0.0, "sla_hours": 24.0}}
+PIPELINE_OK
+run_id=sprint-final
+ingest_boundary_at=2026-04-15T09:37:30.610562+00:00
+raw_records=10
+cleaned_records=6
+quarantine_records=4
+cleaned_csv=artifacts\cleaned\cleaned_sprint-final.csv
+quarantine_csv=artifacts\quarantine\quarantine_sprint-final.csv
+expectation[pydantic_schema_validation] OK (halt) :: pydantic_errors=0
+embed_upsert count=6 collection=day10_kb
+publish_boundary_at=2026-04-15T09:37:36.641095+00:00
+manifest_written=artifacts\manifests\manifest_sprint-final.json
+freshness_check=PASS {"boundary": "publish", "latest_exported_at": "2026-04-15T09:37:36.641095+00:00", "age_hours": 0.0, "sla_hours": 24.0}
+freshness_two_boundary={"overall": "PASS", "run_id": "sprint-final", "ingest": {"status": "PASS", "timestamp": "2026-04-15T09:37:30.610562+00:00", "age_hours": 0.002, "sla_hours": 24.0}, "publish": {"status": "PASS", "timestamp": "2026-04-15T09:37:36.641095+00:00", "age_hours": 0.0, "sla_hours": 24.0}}
+PIPELINE_OK
+run_id=sprint-final
+ingest_boundary_at=2026-04-15T09:37:55.198494+00:00
+raw_records=10
+cleaned_records=6
+quarantine_records=4
+cleaned_csv=artifacts\cleaned\cleaned_sprint-final.csv
+quarantine_csv=artifacts\quarantine\quarantine_sprint-final.csv
+expectation[pydantic_schema_validation] OK (halt) :: pydantic_errors=0
+embed_upsert count=6 collection=day10_kb
+publish_boundary_at=2026-04-15T09:37:59.116634+00:00
+manifest_written=artifacts\manifests\manifest_sprint-final.json
+freshness_check=PASS {"boundary": "publish", "latest_exported_at": "2026-04-15T09:37:59.116634+00:00", "age_hours": 0.0, "sla_hours": 24.0}
+freshness_two_boundary={"overall": "PASS", "run_id": "sprint-final", "ingest": {"status": "PASS", "timestamp": "2026-04-15T09:37:55.198494+00:00", "age_hours": 0.001, "sla_hours": 24.0}, "publish": {"status": "PASS", "timestamp": "2026-04-15T09:37:59.116634+00:00", "age_hours": 0.0, "sla_hours": 24.0}}
+PIPELINE_OK

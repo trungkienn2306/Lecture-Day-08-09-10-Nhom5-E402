@@ -1,60 +1,196 @@
 # Data contract — Lab Day 10 (tiếp nối artifact CS + IT Helpdesk)
-# Sinh viên bổ sung owner, SLA freshness, và nguồn canonical.
+# Nguồn chính thống — đồng bộ với docs/data_contract.md và cleaning_rules.py
 
-version: "1.0"
+version: "1.1"
 dataset: "kb_chunk_export"
 owner_team: "005-E402"
+contact: "Nhom05-E402"
+updated: "2026-04-15"
 
+# ─── Schema cleaned (sau khi qua cleaning_rules.py) ───────────────────────────
 schema_cleaned:
   chunk_id:
     type: string
     required: true
-    description: "ID ổn định sau clean (thường hash hoặc doc_id + seq)"
+    description: "sha256(doc_id|chunk_text|seq)[:16] — stable across reruns"
   doc_id:
     type: string
     required: true
     description: "Khóa logic tài liệu nguồn (vd policy_refund_v4)"
+    constraints:
+      allowlist: "${allowed_doc_ids}"  # xem allowed_doc_ids bên dưới
   chunk_text:
     type: string
     required: true
     constraints:
-      min_length: 8
+      min_length: 20          # env: MIN_CHUNK_CHARS (default 20)
+      no_bom: true            # Rule 7: không ký tự \ufeff hoặc \ufffd
   effective_date:
     type: date
     required: true
+    constraints:
+      format: "YYYY-MM-DD"
+      max_future_days: 365    # env: MAX_FUTURE_DAYS (default 365) — Rule 9
   exported_at:
     type: datetime
     required: true
+    description: "ISO 8601 — dùng để tính latest_exported_at trong manifest"
 
-quality_rules:
-  - id: "no_duplicate_chunk_text"
-    severity: "warn"
-  - id: "no_stale_refund_window"
-    description: "Không được để chunk policy refund chứa cửa sổ 14 ngày (lệch so với v4 = 7 ngày)"
-    severity: "halt"
-
-freshness:
-  measured_at: "publish"  # ingest | cleaned | publish
-  sla_hours: 24
-  alert_channel: "#data-alerts"
-
-canonical_sources:
-  - path: "data/docs/policy_refund_v4.txt"
-    doc_id: "policy_refund_v4"
-  - path: "data/docs/sla_p1_2026.txt"
-    doc_id: "sla_p1_2026"
-  - path: "data/docs/it_helpdesk_faq.txt"
-    doc_id: "it_helpdesk_faq"
-  - path: "data/docs/hr_leave_policy.txt"
-    doc_id: "hr_leave_policy"
-
-# Baseline allowlist export — nhóm mở rộng doc mới phải đồng bộ cleaning_rules + contract.
+# ─── Allowlist doc_id ─────────────────────────────────────────────────────────
 allowed_doc_ids:
   - policy_refund_v4
   - sla_p1_2026
   - it_helpdesk_faq
   - hr_leave_policy
 
-# Merit/Distinction: có thể đưa cutoff versioning vào env và tham chiếu ở đây (tránh hard-code trong code).
+# ─── Canonical sources ────────────────────────────────────────────────────────
+canonical_sources:
+  - path: "data/docs/policy_refund_v4.txt"
+    doc_id: "policy_refund_v4"
+    version: "v4 (2026)"
+    note: "Refund window = 7 ngày làm việc (Rule 6 fix 14→7)"
+  - path: "data/docs/sla_p1_2026.txt"
+    doc_id: "sla_p1_2026"
+    version: "2026"
+    note: "First response 15 phút, resolution 4 giờ"
+  - path: "data/docs/it_helpdesk_faq.txt"
+    doc_id: "it_helpdesk_faq"
+    version: "current"
+    note: "Lockout sau 5 lần đăng nhập sai"
+  - path: "data/docs/hr_leave_policy.txt"
+    doc_id: "hr_leave_policy"
+    version: "2026-01-01+"
+    note: "12 ngày phép năm; bản 2025 (10 ngày) bị quarantine qua Rule 3"
+
+# ─── Quality rules (baseline + nhóm thêm) ────────────────────────────────────
+quality_rules:
+  # Baseline
+  - id: "no_empty_doc_id"
+    severity: "halt"
+    description: "doc_id không được rỗng"
+
+  - id: "no_stale_refund_window"
+    severity: "halt"
+    description: "Chunk policy refund không được chứa '14 ngày làm việc' (v3 stale)"
+    rule_code: "Rule 6 + E3 refund_no_stale_14d_window"
+
+  - id: "hr_leave_no_stale_10d_annual"
+    severity: "halt"
+    description: "Chunk HR không được chứa '10 ngày phép năm' (bản 2025 stale)"
+    cutoff_env: "HR_LEAVE_MIN_EFFECTIVE_DATE"
+    cutoff_default: "2026-01-01"
+    rule_code: "Rule 3 + E5"
+
+  - id: "effective_date_iso_yyyy_mm_dd"
+    severity: "halt"
+    description: "effective_date phải là YYYY-MM-DD sau khi normalize"
+
+  - id: "no_duplicate_chunk_text"
+    severity: "warn"
+    rule_code: "Rule 5"
+
+  - id: "chunk_min_length_8"
+    severity: "warn"
+    description: "chunk_text ≥ 8 chars (baseline expectation)"
+
+  # Nhóm thêm (≥2 expectation mới)
+  - id: "no_stale_leave_policy_any_doc"
+    severity: "halt"
+    description: "Cross-doc: toàn corpus không có chunk '10 ngày phép' (E7)"
+    added_by: "Nhom05-E402"
+
+  - id: "min_chunks_per_expected_doc"
+    severity: "warn"
+    description: "Mỗi doc_id trong allowed_doc_ids phải có ít nhất 1 chunk (E8)"
+    added_by: "Nhom05-E402"
+
+  - id: "pydantic_schema_validation"
+    severity: "halt"
+    description: "Pydantic CleanedChunk(BaseModel) validate 5 fields — Bonus +2"
+    added_by: "Nhom05-E402"
+
+# ─── Cleaning rules tóm tắt ───────────────────────────────────────────────────
+cleaning_rules_summary:
+  - rule: 1
+    name: "unknown_doc_id"
+    action: "quarantine"
+    added_by: "baseline"
+  - rule: 2
+    name: "missing_effective_date"
+    action: "quarantine"
+    added_by: "baseline"
+  - rule: 3
+    name: "stale_hr_policy_effective_date"
+    action: "quarantine"
+    cutoff_env: "HR_LEAVE_MIN_EFFECTIVE_DATE"
+    added_by: "baseline"
+  - rule: 4
+    name: "invalid_effective_date_format"
+    action: "quarantine + normalize DD/MM/YYYY"
+    added_by: "baseline"
+  - rule: 5
+    name: "duplicate_chunk_text"
+    action: "quarantine"
+    added_by: "baseline"
+  - rule: 6
+    name: "refund_window_fix_14_to_7"
+    action: "fix in-place (replace text)"
+    added_by: "baseline"
+  - rule: 7
+    name: "encoding_corruption_in_chunk_text"
+    action: "quarantine (BOM \\ufeff hoặc replacement char \\ufffd)"
+    added_by: "Nhom05-E402"
+  - rule: 8
+    name: "chunk_text_too_short"
+    action: "quarantine"
+    min_chars_env: "MIN_CHUNK_CHARS"
+    min_chars_default: 20
+    added_by: "Nhom05-E402"
+  - rule: 9
+    name: "future_effective_date_exceeds_threshold"
+    action: "quarantine"
+    max_days_env: "MAX_FUTURE_DAYS"
+    max_days_default: 365
+    added_by: "Nhom05-E402"
+
+# ─── Freshness SLA (2 boundaries — Bonus +1) ──────────────────────────────────
+freshness:
+  boundaries:
+    - name: "ingest"
+      manifest_field: "ingest_boundary_at"
+      description: "Timestamp sau khi load_raw_csv() hoàn thành"
+      sla_hours_env: "FRESHNESS_SLA_HOURS"
+      sla_hours_default: 24
+    - name: "publish"
+      manifest_field: "publish_boundary_at"
+      description: "Timestamp sau khi embed vào ChromaDB hoàn thành"
+      sla_hours_env: "FRESHNESS_SLA_HOURS"
+      sla_hours_default: 24
+  alert_channel: "#data-alerts"
+  status_values: ["PASS", "WARN", "FAIL"]
+
+# ─── Policy versioning (env var, không hardcode) ───────────────────────────────
 policy_versioning:
-  hr_leave_min_effective_date: "2026-01-01"
+  hr_leave_min_effective_date:
+    env_var: "HR_LEAVE_MIN_EFFECTIVE_DATE"
+    default: "2026-01-01"
+    description: "Bản HR cũ hơn ngày này bị quarantine (Rule 3)"
+  min_chunk_chars:
+    env_var: "MIN_CHUNK_CHARS"
+    default: 20
+    description: "Chunk ngắn hơn bị quarantine (Rule 8)"
+  max_future_days:
+    env_var: "MAX_FUTURE_DAYS"
+    default: 365
+    description: "effective_date xa hơn N ngày tương lai bị quarantine (Rule 9)"
+
+# ─── Embed config ─────────────────────────────────────────────────────────────
+embed:
+  chroma_collection_env: "CHROMA_COLLECTION"
+  chroma_collection_default: "day10_kb"
+  chroma_path_env: "CHROMA_DB_PATH"
+  chroma_path_default: "./chroma_db"
+  embedding_model_env: "EMBEDDING_MODEL"
+  embedding_model_default: "text-embedding-3-small"
+  embedding_provider: "OpenAI"
+  idempotency: "upsert by chunk_id + prune stale IDs each run"
