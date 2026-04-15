@@ -1,0 +1,15 @@
+run_id=2026-04-15T10-18Z
+ingest_boundary_at=2026-04-15T10:18:14.269602+00:00
+raw_records=10
+cleaned_records=6
+quarantine_records=4
+cleaned_csv=artifacts\cleaned\cleaned_2026-04-15T10-18Z.csv
+quarantine_csv=artifacts\quarantine\quarantine_2026-04-15T10-18Z.csv
+expectation[pydantic_schema_validation] OK (halt) :: pydantic_errors=0
+embed_prune_removed=1
+embed_upsert count=6 collection=day10_kb
+publish_boundary_at=2026-04-15T10:18:20.219018+00:00
+manifest_written=artifacts\manifests\manifest_2026-04-15T10-18Z.json
+freshness_check=PASS {"boundary": "publish", "latest_exported_at": "2026-04-15T10:18:20.219018+00:00", "age_hours": 0.0, "sla_hours": 24.0}
+freshness_two_boundary={"overall": "PASS", "run_id": "2026-04-15T10-18Z", "ingest": {"status": "PASS", "timestamp": "2026-04-15T10:18:14.269602+00:00", "age_hours": 0.002, "sla_hours": 24.0}, "publish": {"status": "PASS", "timestamp": "2026-04-15T10:18:20.219018+00:00", "age_hours": 0.0, "sla_hours": 24.0}}
+PIPELINE_OK

@@ -19,7 +19,7 @@ flowchart TD
     D -->|halt FAIL| STOP["❌ PIPELINE_HALT\nexit 2"]
     E --> F["📊 Manifest JSON\nartifacts/manifests/\nrun_id, counts, 2 boundaries"]
     F --> G["Freshness Check\nmonitoring/freshness_check.py\nPASS/WARN/FAIL"]
-    E --> H["🔍 ChromaDB\nday10_kb collection\nSentenceTransformer"]
+    E --> H["🔍 ChromaDB\nday10_kb collection\nOpenAI text-embedding-3-small"]
     H --> I["Retrieval Eval\neval_retrieval.py\nbefore_after_eval.csv"]
     H --> J["Grading\ngrading_run.py\ngrading_run.jsonl (3 dòng)"]
 ```
@@ -113,7 +113,7 @@ chunk_id = sha256(f"{doc_id}|{chunk_text}|{seq}".encode()).hexdigest()[:16]
 |------|---------|---------|
 | `CHROMA_DB_PATH` | `./chroma_db` | Đường dẫn PersistentClient |
 | `CHROMA_COLLECTION` | `day10_kb` | Tên collection |
-| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | SentenceTransformer model |
+| `EMBEDDING_MODEL` | `text-embedding-3-small` | OpenAI embedding model (1536 dim) |
 | `FRESHNESS_SLA_HOURS` | `24` | SLA freshness (giờ) |
 | `HR_LEAVE_MIN_EFFECTIVE_DATE` | `2026-01-01` | Cutoff bản HR cũ |
 | `MIN_CHUNK_CHARS` | `20` | Độ dài tối thiểu chunk (Rule 8) |

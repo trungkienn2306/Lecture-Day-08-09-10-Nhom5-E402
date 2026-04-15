@@ -89,17 +89,38 @@ Xem đầy đủ: `artifacts/quarantine/quarantine_sprint-final.csv`
 
 **Kịch bản:** Chạy `python eval_retrieval.py` sau inject-bad2 (before) vs sau sprint-final (after).
 
-| Question | Before (inject-bad2) | After (sprint-final) |
-|---------|---------------------|---------------------|
-| Refund window? | `hits_forbidden=yes` ("14 ngày" lọt vào) | `hits_forbidden=no`, `contains_expected=yes` ("7 ngày") |
-| SLA P1? | `contains_expected=yes` (15 phút) | `contains_expected=yes` (15 phút) |
-| HR phép năm 2026? | `hits_forbidden=yes` (HR 2025 lọt) | `hits_forbidden=no`, `top1_doc_expected=yes` |
+| Question | Before (inject-bad2) `after_inject_bad.csv` | After (sprint-final) `before_after_eval.csv` |
+|---------|---------------------------------------------|----------------------------------------------|
+| `q_refund_window` — Hoàn tiền bao nhiêu ngày? | `hits_forbidden=yes` ⚠️ ("14 ngày làm việc" lọt top-k) | `hits_forbidden=no` ✅, `contains_expected=yes` ("7 ngày") |
+| `q_p1_sla` — SLA P1? | `contains_expected=yes`, `hits_forbidden=no` ✅ | `contains_expected=yes`, `hits_forbidden=no` ✅ |
+| `q_lockout` — Đăng nhập sai bị khóa? | `contains_expected=yes`, `hits_forbidden=no` ✅ | `contains_expected=yes`, `hits_forbidden=no` ✅ |
+| `q_leave_version` — HR phép năm 2026? | `contains_expected=yes`, `hits_forbidden=no` ✅ | `contains_expected=yes`, `hits_forbidden=no` ✅, `top1_doc_expected=yes` |
 
 **Bằng chứng:** `artifacts/eval/before_after_eval.csv` (sprint-final) — tất cả 4 câu `contains_expected=yes, hits_forbidden=no`.
 
 ---
 
-## 7. Idempotency Test
+## 7. Grading Questions — Kết quả chính thức (sau 17:00)
+
+Bộ câu hỏi GV phát: `data/grading_questions.json` (3 câu).  
+Chạy bằng: `python grading_run.py --out artifacts/eval/grading_run.jsonl --top-k 5`
+
+| ID | Câu hỏi (tóm tắt) | top1_doc_id | contains_expected | hits_forbidden | top1_doc_matches |
+|----|-------------------|-------------|-------------------|----------------|-----------------|
+| `gq_d10_01` | Hoàn tiền tối đa bao nhiêu ngày? | `policy_refund_v4` | `true` ✅ | `false` ✅ | — |
+| `gq_d10_02` | Ticket P1 resolution SLA? | `sla_p1_2026` | `true` ✅ | `false` ✅ | — |
+| `gq_d10_03` | Phép năm nhân viên < 3 năm (2026)? | `hr_leave_policy` | `true` ✅ | `false` ✅ | `true` ✅ |
+
+**Kết quả: 3/3 câu đạt toàn bộ tiêu chí grading.**  
+- `gq_d10_01`: keyword "7" xuất hiện trong top-5, không có "14 ngày làm việc" → Rule 6 hoạt động đúng.  
+- `gq_d10_02`: keyword "4 giờ" / "4h" xuất hiện trong top-5 → chunk `sla_p1_2026` được embed đúng.  
+- `gq_d10_03`: keyword "12 ngày" xuất hiện, không có "10 ngày phép năm", top-1 đúng doc `hr_leave_policy` → Rule 3 + versioning hoạt động.
+
+Xem đầy đủ: `artifacts/eval/grading_run.jsonl`.
+
+---
+
+## 8. Idempotency Test
 
 Chạy pipeline 2 lần liên tiếp với cùng input:
 
@@ -112,7 +133,7 @@ Chạy pipeline 2 lần liên tiếp với cùng input:
 
 ---
 
-## 8. Freshness 2-Boundary (Bonus +1)
+## 9. Freshness 2-Boundary (Bonus +1)
 
 Từ `manifest_sprint-final.json`:
 
