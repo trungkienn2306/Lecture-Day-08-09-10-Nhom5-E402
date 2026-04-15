@@ -92,6 +92,161 @@ python instructor_quick_check.py --manifest artifacts/manifests/manifest_<run-id
 
 ---
 
+## 2b. Quy trình sau 17:00 — Nhận file Grading Questions và nộp bài
+
+> Thực hiện **theo đúng thứ tự** bên dưới. Toàn bộ quy trình từ nhận file đến push xong khoảng **20–30 phút**.
+
+### Bước 1 — Đảm bảo collection đang ở trạng thái SẠCH
+
+Trước khi chạy grading, ChromaDB **phải** ở trạng thái sprint-final (không có chunk inject-bad).  
+Kiểm tra nhanh — số chunk phải đúng 6:
+
+```powershell
+python -c "import chromadb; c = chromadb.PersistentClient('./chroma_db'); col = c.get_collection('day10_kb'); print('chunk count:', col.count())"
+```
+
+Nếu kết quả **≠ 6**, chạy lại pipeline sạch:
+
+```bash
+python etl_pipeline.py run --run-id sprint-final
+# Chờ đến dòng: PIPELINE_OK
+```
+
+---
+
+### Bước 2 — Nhận file `grading_questions.json` từ Giảng viên
+
+Giảng viên sẽ gửi file `grading_questions.json` qua Teams / LMS / email.  
+Copy file đó vào thư mục đúng vị trí:
+
+```bash
+# Windows (thay <đường-dẫn-GV-gửi> bằng vị trí file thật)
+copy "<đường-dẫn-GV-gửi>\grading_questions.json" "data\grading_questions.json"
+
+# Hoặc Linux/macOS
+cp /path/to/grading_questions.json data/grading_questions.json
+```
+
+Kiểm tra file đã vào đúng chỗ:
+
+```powershell
+# Đếm số câu hỏi (Windows PowerShell)
+python -c "import json; qs = json.load(open('data/grading_questions.json', encoding='utf-8')); print('So cau hoi:', len(qs)); [print(' -', q['id']) for q in qs]"
+```
+
+> **Hoặc xem thô nhanh hơn:**
+> ```powershell
+> type data\grading_questions.json
+> ```
+
+---
+
+### Bước 3 — Chạy Grading
+
+```bash
+python grading_run.py \
+  --questions data/grading_questions.json \
+  --out artifacts/eval/grading_run.jsonl \
+  --top-k 5
+```
+
+Lệnh này sẽ in ra: `Wrote artifacts/eval/grading_run.jsonl`
+
+---
+
+### Bước 4 — Kiểm tra kết quả JSONL
+
+Đọc nhanh kết quả để tự đánh giá trước khi nộp:
+
+```powershell
+# Windows PowerShell — chạy script kiểm tra
+python scripts/check_grading.py
+```
+
+Nếu chưa có script, dùng lệnh một dòng (PowerShell):
+
+```powershell
+python -c "import json; lines=open('artifacts/eval/grading_run.jsonl',encoding='utf-8').readlines(); [print('[OK]' if r['contains_expected'] and not r['hits_forbidden'] else '[FAIL]', r['id'], '| contains_expected=' + str(r['contains_expected']) + ', hits_forbidden=' + str(r['hits_forbidden'])) for r in [json.loads(l) for l in lines]]"
+```
+
+**Kết quả mong đợi (để đạt Merit/Distinction):**
+
+```
+Tổng số dòng: 3
+
+  [OK] gq_d10_01
+         contains_expected=True, hits_forbidden=False
+  [OK] gq_d10_02
+         contains_expected=True, hits_forbidden=False
+  [OK] gq_d10_03
+         contains_expected=True, hits_forbidden=False, top1_doc_matches=True
+```
+
+Nếu bất kỳ câu nào `hits_forbidden=True` → collection vẫn còn chunk bẩn → quay lại Bước 1, chạy lại `etl_pipeline.py run` (không có `--no-refund-fix`), rồi chạy lại grading.
+
+---
+
+### Bước 5 — Kiểm tra nhanh toàn bộ artifact (nếu GV có script)
+
+```bash
+python instructor_quick_check.py --grading artifacts/eval/grading_run.jsonl
+python instructor_quick_check.py --manifest artifacts/manifests/manifest_sprint-final.json
+```
+
+---
+
+### Bước 6 — Commit và Push trước 18:00
+
+```bash
+# Stage tất cả artifact và file grading
+git add data/grading_questions.json
+git add artifacts/eval/grading_run.jsonl
+git add artifacts/eval/before_after_eval.csv
+git add artifacts/eval/after_inject_bad.csv
+git add artifacts/manifests/
+git add artifacts/quarantine/
+git add artifacts/logs/
+git add artifacts/cleaned/
+
+# Stage code và tài liệu (nếu còn chỉnh sửa)
+git add transform/ quality/ monitoring/
+git add etl_pipeline.py eval_retrieval.py grading_run.py
+git add docs/ reports/ contracts/
+git add requirements.txt
+
+# Kiểm tra những gì sẽ commit
+git status
+
+# Commit
+git commit -m "feat: sprint-final artifacts + grading run day10"
+
+# Push
+git push origin feat/day10-test-sprint
+```
+
+Sau khi push, verify trên GitHub/GitLab rằng file `artifacts/eval/grading_run.jsonl` đã có mặt trong repo.
+
+---
+
+### Checklist 5 phút trước khi nộp
+
+```
+✅ artifacts/manifests/manifest_sprint-final.json    (cleaned_records=6, quarantine_records=4)
+✅ artifacts/quarantine/quarantine_sprint-final.csv  (4 dòng, 4 reason khác nhau)
+✅ artifacts/eval/before_after_eval.csv              (4 câu, tất cả hits_forbidden=no)
+✅ artifacts/eval/after_inject_bad.csv               (q_refund_window có hits_forbidden=yes)
+✅ artifacts/eval/grading_run.jsonl                  (N dòng = N câu GV phát, mọi contains_expected=true)
+✅ data/grading_questions.json                       (file GV phát — đã commit)
+✅ docs/runbook.md, pipeline_architecture.md, data_contract.md, quality_report.md
+✅ reports/group_report.md + reports/individual/*.md
+✅ chroma_db/ KHÔNG xuất hiện trong git status (đã gitignore)
+✅ .env KHÔNG xuất hiện trong git status (đã gitignore)
+```
+
+> **Deadline cứng: 18:00.** Nếu push muộn hơn, chỉ `reports/` được nộp bổ sung theo quy định lớp.
+
+---
+
 ## 3. Các files sinh ra trong quá trình chạy (Artifacts)
 
 Tất cả các output sẽ được tự động tống vào nhánh `day10/lab/artifacts/`.
